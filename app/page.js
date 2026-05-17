@@ -1,0 +1,128 @@
+'use client';
+import { useState } from 'react';
+import { useJournal } from '@/hooks/useJournal';
+import Topbar          from '@/components/Topbar';
+import Sidebar         from '@/components/Sidebar';
+import DashboardSidebar from '@/components/DashboardSidebar';
+import Calendar        from '@/components/Calendar';
+import Dashboard       from '@/components/Dashboard';
+import TradeDialog     from '@/components/TradeDialog';
+import DepositDialog   from '@/components/DepositDialog';
+
+export default function HomePage() {
+  const journal = useJournal();
+
+  const [isDashboard,    setIsDashboard]   = useState(false);
+  const [dashSection,    setDashSection]   = useState('overview');
+  const [tradeDate,      setTradeDate]     = useState(null);
+  const [depType,        setDepType]       = useState(null);
+  const [mobSidebar,     setMobSidebar]    = useState(false);
+
+  const openTradeDialog  = (d) => setTradeDate(d);
+  const closeTradeDialog = ()  => setTradeDate(null);
+  const openDepDialog    = (t) => setDepType(t);
+  const closeDepDialog   = ()  => setDepType(null);
+
+  const toggleDashboard = () => {
+    setIsDashboard(prev => !prev);
+    setMobSidebar(false);
+  };
+
+  if (journal.loading) {
+    return <div className="loading-overlay">Loading your journal…</div>;
+  }
+
+  // Augment stats with pendingCount for sidebar badge
+  const statsWithPending = () => {
+    const s = journal.stats();
+    const pendingCount = journal.tradesByStatus('pending').length;
+    return { ...s, pendingCount };
+  };
+
+  return (
+    <div className="app">
+      {/* Mobile overlay */}
+      {mobSidebar && (
+        <div className="sidebar-overlay open" onClick={() => setMobSidebar(false)}/>
+      )}
+
+      <Topbar
+        cur={journal.cur}
+        onPrev={() => journal.goMonth(-1)}
+        onNext={() => journal.goMonth(+1)}
+        onToday={journal.goToday}
+        onOpenDeposit={openDepDialog}
+        onMobMenu={() => setMobSidebar(true)}
+        onLogoClick={toggleDashboard}
+        isDashboard={isDashboard}
+      />
+
+      <div className="body">
+        {/* Sidebar switches based on view */}
+        {isDashboard ? (
+          <DashboardSidebar
+            active={dashSection}
+            onNav={(s) => { setDashSection(s); setMobSidebar(false); }}
+            stats={statsWithPending}
+            mobOpen={mobSidebar}
+          />
+        ) : (
+          <Sidebar
+            stats={journal.stats}
+            sortedTxns={journal.sortedTxns}
+            onOpenDeposit={(type) => { openDepDialog(type); setMobSidebar(false); }}
+            mobOpen={mobSidebar}
+          />
+        )}
+
+        {/* Main content */}
+        {isDashboard ? (
+          <div style={{ flex: 1, overflow: 'hidden auto' }}>
+            <Dashboard
+              activeSection={dashSection}
+              stats={statsWithPending}
+              assetStats={journal.assetStats}
+              pnlSeries={journal.pnlSeries}
+              tradesByStatus={journal.tradesByStatus}
+              allTrades={journal.allTrades}
+              accounts={journal.accounts}
+              saveAccount={journal.saveAccount}
+              deleteAccount={journal.deleteAccount}
+            />
+          </div>
+        ) : (
+          <Calendar
+            cur={journal.cur}
+            today={journal.today}
+            trades={journal.trades}
+            txnsByDate={journal.txnsByDate}
+            onDayClick={openTradeDialog}
+          />
+        )}
+      </div>
+
+      {/* Trade Dialog */}
+      {tradeDate && (
+        <TradeDialog
+          date={tradeDate}
+          existing={journal.trades[
+            `${tradeDate.getFullYear()}-${String(tradeDate.getMonth()+1).padStart(2,'0')}-${String(tradeDate.getDate()).padStart(2,'0')}`
+          ]}
+          accounts={journal.accounts}
+          onSave={journal.saveTrade}
+          onDelete={journal.deleteTrade}
+          onClose={closeTradeDialog}
+        />
+      )}
+
+      {/* Deposit/Withdrawal Dialog */}
+      {depType && (
+        <DepositDialog
+          initialType={depType}
+          onSave={journal.saveTransaction}
+          onClose={closeDepDialog}
+        />
+      )}
+    </div>
+  );
+}

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { fmt, fmtSigned } from '@/hooks/useJournal';
 import TradeDetailModal from './TradeDetailModal';
 
@@ -116,7 +116,7 @@ function DonutChart({ wins, losses }) {
   );
 }
 
-// ── Trade Table with clickable rows ───────────────────────────────────────────
+// ── Trade Table ───────────────────────────────────────────────────────────────
 function TradeTable({ trades, emptyMsg, onRowClick }) {
   if (!trades.length) return (
     <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>{emptyMsg}</div>
@@ -183,9 +183,11 @@ function TradeTable({ trades, emptyMsg, onRowClick }) {
 }
 
 // ── Account Card ──────────────────────────────────────────────────────────────
-function AccountCard({ account, trades, onDelete }) {
+function AccountCard({ account, allTrades, onDelete }) {
   const [showPw, setShowPw] = useState(false);
-  const tradedList = Object.values(trades).filter(t => t.traded && String(t.account_id) === String(account.id));
+  // allTrades is { date: [trade, …] } — flatten to get all individual trades
+  const tradedList = Object.values(allTrades).flat()
+    .filter(t => t.traded && String(t.account_id) === String(account.id));
   const profit = tradedList.filter(t => t.pnl === 'profit').reduce((s, t) => s + Number(t.amount), 0);
   const loss   = tradedList.filter(t => t.pnl === 'loss'  ).reduce((s, t) => s + Number(t.amount), 0);
   const pnl    = profit - loss;
@@ -217,7 +219,6 @@ function AccountCard({ account, trades, onDelete }) {
         </div>
       </div>
 
-      {/* Trader credentials */}
       {(account.trader_id || account.trader_password) && (
         <div style={{
           background: 'var(--surface2)', borderRadius: 'var(--radius)', padding: '8px 12px',
@@ -315,8 +316,6 @@ function AddAccountDialog({ onSave, onClose }) {
             <input className="inp" type="text" placeholder="e.g. IC Markets, Binance, TD Ameritrade"
               value={broker} onChange={e => setBroker(e.target.value)}/>
           </div>
-
-          {/* Trader Credentials */}
           <div style={{ background: 'var(--surface2)', borderRadius: 'var(--radius)', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px' }}>🔑 Trader Credentials</div>
             <div>
@@ -337,7 +336,6 @@ function AddAccountDialog({ onSave, onClose }) {
               </div>
             </div>
           </div>
-
           <div>
             <div className="form-label">Account Type</div>
             <div className="choice-row" style={{ flexWrap: 'wrap', gap: 6 }}>
@@ -420,7 +418,6 @@ export default function Dashboard({
   const assets     = assetStats();
   const bestAsset  = assets[0];
   const worstAsset = assets[assets.length - 1];
-
   const pendingTrades = tradesByStatus('pending');
 
   const handleTradeClick = (trade) => setSelectedTrade(trade);
@@ -430,20 +427,18 @@ export default function Dashboard({
     setSelectedTrade(null);
   };
 
+  // Flatten allTrades for table display
+  const allTradesList = Object.values(allTrades).flat();
+
   // ── Pending section ───────────────────────────────────────────────────────
   if (activeSection === 'pending') {
     return (
       <div className="dash-content">
         {selectedTrade && (
-          <TradeDetailModal
-            trade={selectedTrade}
-            accounts={accounts}
-            onSave={handleTradeDetailSave}
-            onClose={handleTradeDetailClose}
-          />
+          <TradeDetailModal trade={selectedTrade} accounts={accounts}
+            onSave={handleTradeDetailSave} onClose={handleTradeDetailClose} />
         )}
-        <Section
-          title="Pending / Open Trades"
+        <Section title="Pending / Open Trades"
           sub={`${pendingTrades.length} active trade${pendingTrades.length !== 1 ? 's' : ''} — click any row to view details or close trade`}>
           <TradeTable trades={pendingTrades} onRowClick={handleTradeClick}
             emptyMsg="No pending or open trades. Log a trade with status 'Pending' or 'Open'." />
@@ -452,24 +447,20 @@ export default function Dashboard({
     );
   }
 
-  // ── Win Trades section ────────────────────────────────────────────────────
+  // ── Win Trades ────────────────────────────────────────────────────────────
   if (activeSection === 'wins') {
     const wins = tradesByStatus('win');
     const totalWin = wins.reduce((s, t) => s + Number(t.amount), 0);
     return (
       <div className="dash-content">
         {selectedTrade && (
-          <TradeDetailModal
-            trade={selectedTrade}
-            accounts={accounts}
-            onSave={handleTradeDetailSave}
-            onClose={handleTradeDetailClose}
-          />
+          <TradeDetailModal trade={selectedTrade} accounts={accounts}
+            onSave={handleTradeDetailSave} onClose={handleTradeDetailClose} />
         )}
         <div className="kpi-grid" style={{ marginBottom: 16 }}>
-          <KpiCard label="Win Trades"  value={wins.length}                                               color="var(--profit-text)"/>
-          <KpiCard label="Total Profit" value={fmt(totalWin)}                                             color="var(--profit-text)"/>
-          <KpiCard label="Avg Win"      value={wins.length ? fmt(totalWin / wins.length) : '—'}           color="var(--profit-text)"/>
+          <KpiCard label="Win Trades"   value={wins.length}                                     color="var(--profit-text)"/>
+          <KpiCard label="Total Profit" value={fmt(totalWin)}                                   color="var(--profit-text)"/>
+          <KpiCard label="Avg Win"      value={wins.length ? fmt(totalWin / wins.length) : '—'} color="var(--profit-text)"/>
         </div>
         <Section title="Winning Trades" sub="Click any row for full details">
           <TradeTable trades={wins} onRowClick={handleTradeClick} emptyMsg="No winning trades yet. Keep going!" />
@@ -478,24 +469,20 @@ export default function Dashboard({
     );
   }
 
-  // ── Loss Trades section ───────────────────────────────────────────────────
+  // ── Loss Trades ───────────────────────────────────────────────────────────
   if (activeSection === 'losses') {
     const losses = tradesByStatus('loss');
     const totalLoss = losses.reduce((s, t) => s + Number(t.amount), 0);
     return (
       <div className="dash-content">
         {selectedTrade && (
-          <TradeDetailModal
-            trade={selectedTrade}
-            accounts={accounts}
-            onSave={handleTradeDetailSave}
-            onClose={handleTradeDetailClose}
-          />
+          <TradeDetailModal trade={selectedTrade} accounts={accounts}
+            onSave={handleTradeDetailSave} onClose={handleTradeDetailClose} />
         )}
         <div className="kpi-grid" style={{ marginBottom: 16 }}>
-          <KpiCard label="Loss Trades" value={losses.length}                                               color="var(--loss-text)"/>
-          <KpiCard label="Total Loss"  value={fmt(totalLoss)}                                              color="var(--loss-text)"/>
-          <KpiCard label="Avg Loss"    value={losses.length ? fmt(totalLoss / losses.length) : '—'}        color="var(--loss-text)"/>
+          <KpiCard label="Loss Trades" value={losses.length}                                       color="var(--loss-text)"/>
+          <KpiCard label="Total Loss"  value={fmt(totalLoss)}                                      color="var(--loss-text)"/>
+          <KpiCard label="Avg Loss"    value={losses.length ? fmt(totalLoss / losses.length) : '—'} color="var(--loss-text)"/>
         </div>
         <Section title="Losing Trades" sub="Click any row for full details">
           <TradeTable trades={losses} onRowClick={handleTradeClick} emptyMsg="No losing trades! You're clean." />
@@ -504,7 +491,7 @@ export default function Dashboard({
     );
   }
 
-  // ── Accounts section ──────────────────────────────────────────────────────
+  // ── Accounts ──────────────────────────────────────────────────────────────
   if (activeSection === 'accounts') {
     return (
       <div className="dash-content">
@@ -534,7 +521,7 @@ export default function Dashboard({
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 }}>
             {accounts.map(a => (
-              <AccountCard key={a.id} account={a} trades={allTrades} onDelete={deleteAccount} />
+              <AccountCard key={a.id} account={a} allTrades={allTrades} onDelete={deleteAccount} />
             ))}
           </div>
         )}
@@ -542,19 +529,14 @@ export default function Dashboard({
     );
   }
 
-  // ── Overview (default) ────────────────────────────────────────────────────
+  // ── Overview ──────────────────────────────────────────────────────────────
   return (
     <div className="dash-content">
       {selectedTrade && (
-        <TradeDetailModal
-          trade={selectedTrade}
-          accounts={accounts}
-          onSave={handleTradeDetailSave}
-          onClose={handleTradeDetailClose}
-        />
+        <TradeDetailModal trade={selectedTrade} accounts={accounts}
+          onSave={handleTradeDetailSave} onClose={handleTradeDetailClose} />
       )}
 
-      {/* KPI row */}
       <div className="kpi-grid">
         <KpiCard label="Account Balance" value={`$${Math.abs(s.balance).toFixed(2)}`}
           color="var(--blue)" sub={`${s.totalDep > 0 ? `Deposited $${s.totalDep.toFixed(2)}` : 'No deposits'}`}/>
@@ -564,11 +546,10 @@ export default function Dashboard({
         <KpiCard label="Win Rate" value={s.winRate !== null ? `${s.winRate}%` : '—'}
           color={s.winRate === null ? 'var(--text)' : s.winRate >= 50 ? 'var(--profit-text)' : 'var(--loss-text)'}
           sub={`${s.tradeDays} trading days`}/>
-        <KpiCard label="Total Trades" value={s.tradeDays}
+        <KpiCard label="Total Trades" value={allTradesList.filter(t => t.traded).length}
           color="var(--text)" sub={`${accounts.length} account${accounts.length !== 1 ? 's' : ''}`}/>
       </div>
 
-      {/* P&L Chart + Win/Loss donut */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 200px', gap: 14 }}>
         <Section title="Cumulative P&L" sub={series.length ? `${series[0].date} → ${series[series.length - 1].date}` : 'No trades yet'}>
           <PnlLineChart data={series} />
@@ -598,7 +579,6 @@ export default function Dashboard({
         </Section>
       </div>
 
-      {/* Asset performance */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 200px', gap: 14 }}>
         <Section title="Asset Performance" sub="Net P&L per instrument">
           <BarChart data={assets} />
@@ -625,10 +605,9 @@ export default function Dashboard({
         </div>
       </div>
 
-      {/* Recent trades table */}
       <Section title="Recent Trades" sub="Latest 20 entries — click any row for full details">
         <TradeTable
-          trades={Object.values(allTrades)
+          trades={allTradesList
             .filter(t => t.traded)
             .sort((a, b) => b.date.localeCompare(a.date))
             .slice(0, 20)}

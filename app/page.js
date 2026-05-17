@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { useJournal } from '@/hooks/useJournal';
+import { useJournal, dateKey } from '@/hooks/useJournal';
 import Topbar           from '@/components/Topbar';
 import Sidebar          from '@/components/Sidebar';
 import DashboardSidebar from '@/components/DashboardSidebar';
@@ -37,6 +37,10 @@ export default function HomePage() {
     const pendingCount = journal.tradesByStatus('pending').length;
     return { ...s, pendingCount };
   };
+
+  // Trades for the selected date (now an array)
+  const tradeDateKey      = tradeDate ? dateKey(tradeDate) : null;
+  const existingDayTrades = tradeDateKey ? (journal.trades[tradeDateKey] || []) : [];
 
   return (
     <div className="app">
@@ -98,13 +102,11 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* Trade Dialog */}
+      {/* Trade Dialog — existing is now an array of trades for that day */}
       {tradeDate && (
         <TradeDialog
           date={tradeDate}
-          existing={journal.trades[
-            `${tradeDate.getFullYear()}-${String(tradeDate.getMonth()+1).padStart(2,'0')}-${String(tradeDate.getDate()).padStart(2,'0')}`
-          ]}
+          existing={existingDayTrades}
           accounts={journal.accounts}
           onSave={journal.saveTrade}
           onDelete={journal.deleteTrade}

@@ -11,3 +11,4 @@ create policy "allow all on transactions"
   on transactions for all
   using (true)
   with check (true);
+  ALTER TABLE trades DROP CONSTRAINT trades_date_key;

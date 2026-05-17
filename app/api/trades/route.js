@@ -2,21 +2,23 @@ import { supabase, SUPABASE_MISSING } from '@/lib/supabase';
 import { NextResponse } from 'next/server';
 
 const guard = () =>
-  !supabase
-    ? NextResponse.json({ error: SUPABASE_MISSING }, { status: 503 })
-    : null;
+  !supabase ? NextResponse.json({ error: SUPABASE_MISSING }, { status: 503 }) : null;
 
-// GET /api/trades            — returns ALL trades
-// GET /api/trades?year=2025&month=5  — returns trades for that month
+// GET /api/trades                    — all trades
+// GET /api/trades?year=2025&month=5  — trades for month
+// GET /api/trades?date=2025-05-12    — trades for specific date
 export async function GET(request) {
   const err = guard(); if (err) return err;
   const { searchParams } = new URL(request.url);
   const year  = searchParams.get('year');
   const month = searchParams.get('month');
+  const date  = searchParams.get('date');
 
-  let query = supabase.from('trades').select('*').order('date');
+  let query = supabase.from('trades').select('*').order('date').order('created_at');
 
-  if (year && month) {
+  if (date) {
+    query = query.eq('date', date);
+  } else if (year && month) {
     const y = String(year);
     const m = String(month).padStart(2, '0');
     const from = `${y}-${m}-01`;
@@ -30,7 +32,7 @@ export async function GET(request) {
   return NextResponse.json(data);
 }
 
-// POST /api/trades  — upsert (insert or update by date)
+// POST /api/trades — always INSERT a new trade row
 export async function POST(request) {
   const err = guard(); if (err) return err;
 
@@ -67,7 +69,7 @@ export async function POST(request) {
 
   const { data, error } = await supabase
     .from('trades')
-    .upsert(payload, { onConflict: 'date' })
+    .insert(payload)
     .select()
     .single();
 
@@ -75,15 +77,43 @@ export async function POST(request) {
   return NextResponse.json(data);
 }
 
-// DELETE /api/trades?date=2025-05-12
+// PATCH /api/trades?id=123 — update a specific trade by id
+export async function PATCH(request) {
+  const err = guard(); if (err) return err;
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get('id');
+  if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
+
+  const body = await request.json();
+  // Remove id from body if present (not a column)
+  const { id: _id, ...updateData } = body;
+
+  const { data, error } = await supabase
+    .from('trades')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json(data);
+}
+
+// DELETE /api/trades?id=123   — delete one trade by id
+// DELETE /api/trades?date=... — delete ALL trades for a date (bulk, legacy)
 export async function DELETE(request) {
   const err = guard(); if (err) return err;
-
   const { searchParams } = new URL(request.url);
+  const id   = searchParams.get('id');
   const date = searchParams.get('date');
-  if (!date) return NextResponse.json({ error: 'date is required' }, { status: 400 });
 
-  const { error } = await supabase.from('trades').delete().eq('date', date);
+  if (!id && !date)
+    return NextResponse.json({ error: 'id or date is required' }, { status: 400 });
+
+  const { error } = id
+    ? await supabase.from('trades').delete().eq('id', id)
+    : await supabase.from('trades').delete().eq('date', date);
+
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

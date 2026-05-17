@@ -19,8 +19,11 @@ export async function GET() {
 export async function POST(request) {
   const err = guard(); if (err) return err;
   const body = await request.json();
-  const { name, broker, type, currency, initial_balance, note } = body;
-  if (!name) return NextResponse.json({ error: 'name is required' }, { status: 400 });
+  const { name, broker, type, currency, initial_balance, note, trader_id, trader_password } = body;
+
+  if (!name)            return NextResponse.json({ error: 'name is required' },            { status: 400 });
+  if (!trader_id)       return NextResponse.json({ error: 'trader_id is required' },       { status: 400 });
+  if (!trader_password) return NextResponse.json({ error: 'trader_password is required' }, { status: 400 });
 
   const { data, error } = await supabase
     .from('accounts')
@@ -31,6 +34,8 @@ export async function POST(request) {
       currency:        currency        || 'USD',
       initial_balance: initial_balance || 0,
       note:            note            || null,
+      trader_id:       trader_id,
+      trader_password: trader_password,
     })
     .select()
     .single();
@@ -39,7 +44,7 @@ export async function POST(request) {
   return NextResponse.json(data);
 }
 
-// PATCH /api/accounts?id=1  (partial update)
+// PATCH /api/accounts?id=1
 export async function PATCH(request) {
   const err = guard(); if (err) return err;
   const { searchParams } = new URL(request.url);

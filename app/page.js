@@ -1,22 +1,22 @@
 'use client';
 import { useState } from 'react';
 import { useJournal } from '@/hooks/useJournal';
-import Topbar          from '@/components/Topbar';
-import Sidebar         from '@/components/Sidebar';
+import Topbar           from '@/components/Topbar';
+import Sidebar          from '@/components/Sidebar';
 import DashboardSidebar from '@/components/DashboardSidebar';
-import Calendar        from '@/components/Calendar';
-import Dashboard       from '@/components/Dashboard';
-import TradeDialog     from '@/components/TradeDialog';
-import DepositDialog   from '@/components/DepositDialog';
+import Calendar         from '@/components/Calendar';
+import Dashboard        from '@/components/Dashboard';
+import TradeDialog      from '@/components/TradeDialog';
+import DepositDialog    from '@/components/DepositDialog';
 
 export default function HomePage() {
   const journal = useJournal();
 
-  const [isDashboard,    setIsDashboard]   = useState(false);
-  const [dashSection,    setDashSection]   = useState('overview');
-  const [tradeDate,      setTradeDate]     = useState(null);
-  const [depType,        setDepType]       = useState(null);
-  const [mobSidebar,     setMobSidebar]    = useState(false);
+  const [isDashboard, setIsDashboard] = useState(false);
+  const [dashSection, setDashSection] = useState('overview');
+  const [tradeDate,   setTradeDate]   = useState(null);
+  const [depType,     setDepType]     = useState(null);
+  const [mobSidebar,  setMobSidebar]  = useState(false);
 
   const openTradeDialog  = (d) => setTradeDate(d);
   const closeTradeDialog = ()  => setTradeDate(null);
@@ -32,7 +32,6 @@ export default function HomePage() {
     return <div className="loading-overlay">Loading your journal…</div>;
   }
 
-  // Augment stats with pendingCount for sidebar badge
   const statsWithPending = () => {
     const s = journal.stats();
     const pendingCount = journal.tradesByStatus('pending').length;
@@ -41,7 +40,6 @@ export default function HomePage() {
 
   return (
     <div className="app">
-      {/* Mobile overlay */}
       {mobSidebar && (
         <div className="sidebar-overlay open" onClick={() => setMobSidebar(false)}/>
       )}
@@ -58,7 +56,6 @@ export default function HomePage() {
       />
 
       <div className="body">
-        {/* Sidebar switches based on view */}
         {isDashboard ? (
           <DashboardSidebar
             active={dashSection}
@@ -75,7 +72,6 @@ export default function HomePage() {
           />
         )}
 
-        {/* Main content */}
         {isDashboard ? (
           <div style={{ flex: 1, overflow: 'hidden auto' }}>
             <Dashboard
@@ -88,6 +84,7 @@ export default function HomePage() {
               accounts={journal.accounts}
               saveAccount={journal.saveAccount}
               deleteAccount={journal.deleteAccount}
+              saveTrade={journal.saveTrade}
             />
           </div>
         ) : (
@@ -119,6 +116,7 @@ export default function HomePage() {
       {depType && (
         <DepositDialog
           initialType={depType}
+          accounts={journal.accounts}
           onSave={journal.saveTransaction}
           onClose={closeDepDialog}
         />

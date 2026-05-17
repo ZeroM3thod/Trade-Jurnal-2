@@ -1,14 +1,14 @@
 'use client';
 import { useState, useMemo } from 'react';
 import { fmt, fmtSigned } from '@/hooks/useJournal';
+import TradeDetailModal from './TradeDetailModal';
 
-// ── Tiny inline chart components (no external deps) ──────────────────────────
+// ── Tiny chart components ─────────────────────────────────────────────────────
 
 function Sparkline({ data, color = 'var(--blue)', height = 40 }) {
   if (!data || data.length < 2) return <div style={{ height }} />;
   const vals = data.map(d => d.cumPnl);
-  const min  = Math.min(...vals);
-  const max  = Math.max(...vals);
+  const min = Math.min(...vals); const max = Math.max(...vals);
   const range = max - min || 1;
   const w = 200; const h = height;
   const pts = vals.map((v, i) =>
@@ -35,19 +35,15 @@ function BarChart({ data, maxBars = 8 }) {
             <div style={{ width: 70, fontSize: 11, color: 'var(--text2)', textAlign: 'right', flexShrink: 0, fontWeight: 500 }}>{item.asset}</div>
             <div style={{ flex: 1, background: 'var(--surface2)', borderRadius: 4, height: 20, position: 'relative', overflow: 'hidden' }}>
               <div style={{
-                position: 'absolute', left: 0, top: 0, height: '100%',
-                width: `${pct}%`,
+                position: 'absolute', left: 0, top: 0, height: '100%', width: `${pct}%`,
                 background: isPos ? 'var(--profit)' : 'var(--loss)',
-                borderRadius: 4, opacity: 0.8,
-                transition: 'width 0.6s ease',
+                borderRadius: 4, opacity: 0.8, transition: 'width 0.6s ease',
               }}/>
               <span style={{
                 position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
                 fontSize: 10, fontWeight: 600,
                 color: isPos ? 'var(--profit-text)' : 'var(--loss-text)',
-              }}>
-                {fmtSigned(item.net)}
-              </span>
+              }}>{fmtSigned(item.net)}</span>
             </div>
             <div style={{ fontSize: 10, color: 'var(--text3)', width: 32, textAlign: 'right', flexShrink: 0 }}>{item.winRate}%</div>
           </div>
@@ -62,39 +58,24 @@ function PnlLineChart({ data }) {
     return <div style={{ height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text3)', fontSize: 13 }}>Not enough trades yet.</div>;
   }
   const vals = data.map(d => d.cumPnl);
-  const min  = Math.min(...vals, 0);
-  const max  = Math.max(...vals, 0);
+  const min = Math.min(...vals, 0); const max = Math.max(...vals, 0);
   const range = max - min || 1;
   const W = 600; const H = 130;
   const pad = { t: 10, b: 24, l: 48, r: 10 };
-  const iW = W - pad.l - pad.r;
-  const iH = H - pad.t - pad.b;
-
-  const toX = i  => pad.l + (i / (data.length - 1)) * iW;
-  const toY = v  => pad.t + iH - ((v - min) / range) * iH;
-
+  const iW = W - pad.l - pad.r; const iH = H - pad.t - pad.b;
+  const toX = i => pad.l + (i / (data.length - 1)) * iW;
+  const toY = v => pad.t + iH - ((v - min) / range) * iH;
   const pts = data.map((d, i) => `${toX(i)},${toY(d.cumPnl)}`).join(' ');
   const areaBottom = toY(0);
-
-  // Area path
   const area = `M${pad.l},${areaBottom} ` +
     data.map((d, i) => `L${toX(i)},${toY(d.cumPnl)}`).join(' ') +
     ` L${toX(data.length - 1)},${areaBottom} Z`;
-
-  // Y-axis labels
-  const yTicks = [min, (min + max) / 2, max].map(v => ({
-    v, y: toY(v), label: (v >= 0 ? '+' : '') + v.toFixed(0),
-  }));
-
-  // X-axis: show first, middle, last date labels
+  const yTicks = [min, (min + max) / 2, max].map(v => ({ v, y: toY(v), label: (v >= 0 ? '+' : '') + v.toFixed(0) }));
   const xTicks = [0, Math.floor((data.length - 1) / 2), data.length - 1]
     .filter((v, i, a) => a.indexOf(v) === i)
     .map(i => ({ i, x: toX(i), label: data[i].date.slice(5) }));
-
   const isPositive = vals[vals.length - 1] >= 0;
-  const lineColor  = isPositive ? 'var(--profit)' : 'var(--loss)';
-  const areaColor  = isPositive ? 'rgba(129,201,149,0.15)' : 'rgba(242,139,130,0.12)';
-
+  const lineColor = isPositive ? 'var(--profit)' : 'var(--loss)';
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 160 }} preserveAspectRatio="none">
       <defs>
@@ -103,23 +84,14 @@ function PnlLineChart({ data }) {
           <stop offset="100%" stopColor={isPositive ? '#81c995' : '#f28b82'} stopOpacity="0"/>
         </linearGradient>
       </defs>
-      {/* Zero line */}
-      <line x1={pad.l} y1={toY(0)} x2={W - pad.r} y2={toY(0)}
-        stroke="var(--border2)" strokeWidth="0.8" strokeDasharray="4 4"/>
-      {/* Area */}
+      <line x1={pad.l} y1={toY(0)} x2={W - pad.r} y2={toY(0)} stroke="var(--border2)" strokeWidth="0.8" strokeDasharray="4 4"/>
       <path d={area} fill="url(#areaGrad)"/>
-      {/* Line */}
-      <polyline points={pts} fill="none" stroke={lineColor} strokeWidth="1.8"
-        strokeLinejoin="round" strokeLinecap="round"/>
-      {/* Y ticks */}
+      <polyline points={pts} fill="none" stroke={lineColor} strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round"/>
       {yTicks.map(t => (
-        <text key={t.v} x={pad.l - 4} y={t.y + 4} textAnchor="end"
-          fontSize="9" fill="var(--text3)">{t.label}</text>
+        <text key={t.v} x={pad.l - 4} y={t.y + 4} textAnchor="end" fontSize="9" fill="var(--text3)">{t.label}</text>
       ))}
-      {/* X ticks */}
       {xTicks.map(t => (
-        <text key={t.i} x={t.x} y={H - 4} textAnchor="middle"
-          fontSize="9" fill="var(--text3)">{t.label}</text>
+        <text key={t.i} x={t.x} y={H - 4} textAnchor="middle" fontSize="9" fill="var(--text3)">{t.label}</text>
       ))}
     </svg>
   );
@@ -131,19 +103,12 @@ function DonutChart({ wins, losses }) {
   const winPct = wins / total;
   const r = 28; const cx = 40; const cy = 40; const sw = 10;
   const circ = 2 * Math.PI * r;
-  const winArc  = circ * winPct;
-  const lossArc = circ * (1 - winPct);
+  const winArc = circ * winPct;
   return (
     <svg width="80" height="80" viewBox="0 0 80 80">
-      {/* Loss arc (background) */}
-      <circle cx={cx} cy={cy} r={r} fill="none"
-        stroke="rgba(242,139,130,0.35)" strokeWidth={sw}/>
-      {/* Win arc */}
-      <circle cx={cx} cy={cy} r={r} fill="none"
-        stroke="var(--profit)" strokeWidth={sw}
-        strokeDasharray={`${winArc} ${circ - winArc}`}
-        strokeDashoffset={circ / 4}
-        strokeLinecap="round"/>
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(242,139,130,0.35)" strokeWidth={sw}/>
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--profit)" strokeWidth={sw}
+        strokeDasharray={`${winArc} ${circ - winArc}`} strokeDashoffset={circ / 4} strokeLinecap="round"/>
       <text x={cx} y={cy + 4} textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text)">
         {Math.round(winPct * 100)}%
       </text>
@@ -151,8 +116,8 @@ function DonutChart({ wins, losses }) {
   );
 }
 
-// ── Trade Table ───────────────────────────────────────────────────────────────
-function TradeTable({ trades, emptyMsg }) {
+// ── Trade Table with clickable rows ───────────────────────────────────────────
+function TradeTable({ trades, emptyMsg, onRowClick }) {
   if (!trades.length) return (
     <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>{emptyMsg}</div>
   );
@@ -161,7 +126,7 @@ function TradeTable({ trades, emptyMsg }) {
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
           <tr style={{ borderBottom: '1px solid var(--border)' }}>
-            {['Date','Asset','Direction','Status','Entry','Exit','Lots','P&L','Note'].map(h => (
+            {['Date','Asset','Direction','Status','Entry','Entry Time','Exit','Exit Time','Lots','P&L',''].map(h => (
               <th key={h} style={{ padding: '8px 10px', textAlign: 'left', color: 'var(--text3)', fontWeight: 500, whiteSpace: 'nowrap' }}>{h}</th>
             ))}
           </tr>
@@ -170,11 +135,13 @@ function TradeTable({ trades, emptyMsg }) {
           {trades.map(t => {
             const isProfit = t.pnl === 'profit';
             return (
-              <tr key={t.id || t.date} style={{ borderBottom: '1px solid var(--border)', transition: 'background .1s' }}
+              <tr key={t.id || t.date}
+                style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer', transition: 'background .1s' }}
+                onClick={() => onRowClick && onRowClick(t)}
                 onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'}
                 onMouseLeave={e => e.currentTarget.style.background = ''}>
                 <td style={{ padding: '8px 10px', color: 'var(--text2)', whiteSpace: 'nowrap' }}>{t.date}</td>
-                <td style={{ padding: '8px 10px', fontWeight: 500, color: 'var(--text)' }}>{t.asset_name || '—'}</td>
+                <td style={{ padding: '8px 10px', fontWeight: 600, color: 'var(--text)' }}>{t.asset_name || '—'}</td>
                 <td style={{ padding: '8px 10px' }}>
                   {t.direction ? (
                     <span style={{
@@ -194,14 +161,17 @@ function TradeTable({ trades, emptyMsg }) {
                   }}>{t.status || 'closed'}</span>
                 </td>
                 <td style={{ padding: '8px 10px', color: 'var(--text2)', fontFamily: 'monospace', fontSize: 11 }}>{t.entry_price ?? '—'}</td>
+                <td style={{ padding: '8px 10px', color: 'var(--blue)', fontSize: 11 }}>{t.entry_time || '—'}</td>
                 <td style={{ padding: '8px 10px', color: 'var(--text2)', fontFamily: 'monospace', fontSize: 11 }}>{t.exit_price ?? '—'}</td>
+                <td style={{ padding: '8px 10px', color: 'var(--blue)', fontSize: 11 }}>{t.exit_time || '—'}</td>
                 <td style={{ padding: '8px 10px', color: 'var(--text2)' }}>{t.lots ?? '—'}</td>
                 <td style={{ padding: '8px 10px', fontWeight: 600,
-                  color: !t.traded ? 'var(--text3)' : isProfit ? 'var(--profit-text)' : 'var(--loss-text)' }}>
-                  {t.traded ? `${isProfit ? '+' : '-'}${fmt(t.amount)}` : '—'}
+                  color: !t.traded ? 'var(--text3)' : t.status !== 'closed' ? 'var(--gold)' : isProfit ? 'var(--profit-text)' : 'var(--loss-text)' }}>
+                  {!t.traded ? '—' : t.status !== 'closed' ? 'Pending' : `${isProfit ? '+' : '-'}${fmt(t.amount)}`}
                 </td>
-                <td style={{ padding: '8px 10px', color: 'var(--text3)', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {t.note || t.trade_reason || '—'}
+                <td style={{ padding: '8px 6px' }}>
+                  {t.screenshot_url && <span title="Has screenshot" style={{ fontSize: 14 }}>📷</span>}
+                  {(t.trade_reason || t.note) && <span title="Has notes" style={{ fontSize: 14 }}>📝</span>}
                 </td>
               </tr>
             );
@@ -214,6 +184,7 @@ function TradeTable({ trades, emptyMsg }) {
 
 // ── Account Card ──────────────────────────────────────────────────────────────
 function AccountCard({ account, trades, onDelete }) {
+  const [showPw, setShowPw] = useState(false);
   const tradedList = Object.values(trades).filter(t => t.traded && String(t.account_id) === String(account.id));
   const profit = tradedList.filter(t => t.pnl === 'profit').reduce((s, t) => s + Number(t.amount), 0);
   const loss   = tradedList.filter(t => t.pnl === 'loss'  ).reduce((s, t) => s + Number(t.amount), 0);
@@ -224,7 +195,7 @@ function AccountCard({ account, trades, onDelete }) {
     <div style={{
       background: 'var(--surface)', border: '1px solid var(--border)',
       borderRadius: 'var(--radius-lg)', padding: '16px 18px',
-      display: 'flex', flexDirection: 'column', gap: 10,
+      display: 'flex', flexDirection: 'column', gap: 12,
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
@@ -233,9 +204,9 @@ function AccountCard({ account, trades, onDelete }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{
-            fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 10,
+            fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 10, textTransform: 'uppercase',
             background: `${TYPE_COLOR[account.type] || 'var(--text2)'}22`,
-            color: TYPE_COLOR[account.type] || 'var(--text2)', textTransform: 'uppercase',
+            color: TYPE_COLOR[account.type] || 'var(--text2)',
           }}>{account.type}</span>
           <button onClick={() => onDelete(account.id)} style={{
             background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer',
@@ -245,6 +216,33 @@ function AccountCard({ account, trades, onDelete }) {
             onMouseLeave={e => e.currentTarget.style.color = 'var(--text3)'}>×</button>
         </div>
       </div>
+
+      {/* Trader credentials */}
+      {(account.trader_id || account.trader_password) && (
+        <div style={{
+          background: 'var(--surface2)', borderRadius: 'var(--radius)', padding: '8px 12px',
+          display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8,
+        }}>
+          {account.trader_id && (
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 2 }}>Trader ID</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', fontFamily: 'monospace' }}>{account.trader_id}</div>
+            </div>
+          )}
+          {account.trader_password && (
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 2 }}>Password</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: 6 }}>
+                {showPw ? account.trader_password : '••••••••'}
+                <button onClick={() => setShowPw(p => !p)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, padding: 0, color: 'var(--text3)' }}>
+                  {showPw ? '🙈' : '👁'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
         <div style={{ background: 'var(--surface2)', borderRadius: 'var(--radius)', padding: '8px 10px' }}>
           <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 3 }}>Total P&L</div>
@@ -270,17 +268,30 @@ function AccountCard({ account, trades, onDelete }) {
 
 // ── AddAccountDialog ──────────────────────────────────────────────────────────
 function AddAccountDialog({ onSave, onClose }) {
-  const [name,    setName]    = useState('');
-  const [broker,  setBroker]  = useState('');
-  const [type,    setType]    = useState('forex');
-  const [initial, setInitial] = useState('');
-  const [note,    setNote]    = useState('');
-  const [saving,  setSaving]  = useState(false);
+  const [name,      setName]      = useState('');
+  const [broker,    setBroker]    = useState('');
+  const [type,      setType]      = useState('forex');
+  const [initial,   setInitial]   = useState('');
+  const [note,      setNote]      = useState('');
+  const [traderId,  setTraderId]  = useState('');
+  const [traderPw,  setTraderPw]  = useState('');
+  const [showPw,    setShowPw]    = useState(false);
+  const [saving,    setSaving]    = useState(false);
+
+  const canSave = name.trim() && traderId.trim() && traderPw.trim();
 
   const handleSave = async () => {
-    if (!name.trim()) return;
+    if (!canSave) return;
     setSaving(true);
-    await onSave({ name: name.trim(), broker: broker.trim(), type, initial_balance: parseFloat(initial) || 0, note: note.trim() });
+    await onSave({
+      name:             name.trim(),
+      broker:           broker.trim(),
+      type,
+      initial_balance:  parseFloat(initial) || 0,
+      note:             note.trim(),
+      trader_id:        traderId.trim(),
+      trader_password:  traderPw.trim(),
+    });
     setSaving(false);
     onClose();
   };
@@ -288,14 +299,14 @@ function AddAccountDialog({ onSave, onClose }) {
   return (
     <div className="overlay" role="dialog" aria-modal="true"
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="dialog" style={{ maxWidth: 400 }}>
+      <div className="dialog" style={{ maxWidth: 420 }}>
         <div className="dlg-header">
           <div className="dlg-title">Add Account</div>
           <button className="dlg-close" onClick={onClose}>&#x2715;</button>
         </div>
         <div className="dlg-body">
           <div>
-            <div className="form-label">Account Name *</div>
+            <div className="form-label">Account Name <span style={{ color: 'var(--loss-text)' }}>*</span></div>
             <input className="inp" type="text" placeholder="e.g. IC Markets Live, Binance…"
               value={name} onChange={e => setName(e.target.value)} autoFocus/>
           </div>
@@ -304,6 +315,29 @@ function AddAccountDialog({ onSave, onClose }) {
             <input className="inp" type="text" placeholder="e.g. IC Markets, Binance, TD Ameritrade"
               value={broker} onChange={e => setBroker(e.target.value)}/>
           </div>
+
+          {/* Trader Credentials */}
+          <div style={{ background: 'var(--surface2)', borderRadius: 'var(--radius)', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px' }}>🔑 Trader Credentials</div>
+            <div>
+              <div className="form-label">Trader ID / Login <span style={{ color: 'var(--loss-text)' }}>*</span></div>
+              <input className="inp" type="text" placeholder="e.g. 12345678"
+                value={traderId} onChange={e => setTraderId(e.target.value)}/>
+            </div>
+            <div>
+              <div className="form-label">Trader Password <span style={{ color: 'var(--loss-text)' }}>*</span></div>
+              <div style={{ position: 'relative' }}>
+                <input className="inp" type={showPw ? 'text' : 'password'} placeholder="Enter password"
+                  style={{ paddingRight: 40 }}
+                  value={traderPw} onChange={e => setTraderPw(e.target.value)}/>
+                <button onClick={() => setShowPw(p => !p)} style={{
+                  position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                  background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', fontSize: 14,
+                }}>{showPw ? '🙈' : '👁'}</button>
+              </div>
+            </div>
+          </div>
+
           <div>
             <div className="form-label">Account Type</div>
             <div className="choice-row" style={{ flexWrap: 'wrap', gap: 6 }}>
@@ -330,7 +364,7 @@ function AddAccountDialog({ onSave, onClose }) {
         </div>
         <div className="dlg-footer">
           <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={saving || !name.trim()}>
+          <button className="btn btn-primary" onClick={handleSave} disabled={saving || !canSave}>
             {saving ? 'Saving…' : 'Add Account'}
           </button>
         </div>
@@ -340,7 +374,7 @@ function AddAccountDialog({ onSave, onClose }) {
 }
 
 // ── KPI Card ──────────────────────────────────────────────────────────────────
-function KpiCard({ label, value, sub, color, trend }) {
+function KpiCard({ label, value, sub, color }) {
   return (
     <div style={{
       background: 'var(--surface)', border: '1px solid var(--border)',
@@ -354,17 +388,13 @@ function KpiCard({ label, value, sub, color, trend }) {
   );
 }
 
-// ── Section wrapper ────────────────────────────────────────────────────────────
 function Section({ title, sub, children, action }) {
   return (
     <div style={{
       background: 'var(--surface)', border: '1px solid var(--border)',
       borderRadius: 'var(--radius-lg)', overflow: 'hidden',
     }}>
-      <div style={{
-        padding: '14px 18px', borderBottom: '1px solid var(--border)',
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-      }}>
+      <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{title}</div>
           {sub && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 1 }}>{sub}</div>}
@@ -377,62 +407,104 @@ function Section({ title, sub, children, action }) {
 }
 
 // ── Main Dashboard ────────────────────────────────────────────────────────────
-export default function Dashboard({ activeSection, stats, assetStats, pnlSeries, tradesByStatus, allTrades, accounts, saveAccount, deleteAccount }) {
-  const [showAddAccount, setShowAddAccount] = useState(false);
+export default function Dashboard({
+  activeSection, stats, assetStats, pnlSeries,
+  tradesByStatus, allTrades, accounts,
+  saveAccount, deleteAccount, saveTrade,
+}) {
+  const [showAddAccount,  setShowAddAccount]  = useState(false);
+  const [selectedTrade,   setSelectedTrade]   = useState(null);
 
-  const s         = stats();
-  const series    = pnlSeries();
-  const assets    = assetStats();
-  const bestAsset = assets[0];
+  const s          = stats();
+  const series     = pnlSeries();
+  const assets     = assetStats();
+  const bestAsset  = assets[0];
   const worstAsset = assets[assets.length - 1];
 
-  // Extend stats with pendingCount
   const pendingTrades = tradesByStatus('pending');
 
+  const handleTradeClick = (trade) => setSelectedTrade(trade);
+  const handleTradeDetailClose = () => setSelectedTrade(null);
+  const handleTradeDetailSave  = async (payload) => {
+    if (saveTrade) await saveTrade(payload);
+    setSelectedTrade(null);
+  };
+
+  // ── Pending section ───────────────────────────────────────────────────────
   if (activeSection === 'pending') {
     return (
       <div className="dash-content">
-        <Section title="Pending / Open Trades" sub={`${pendingTrades.length} active trade${pendingTrades.length !== 1 ? 's' : ''}`}>
-          <TradeTable trades={pendingTrades} emptyMsg="No pending or open trades. Log a trade with status 'Open' or 'Pending'." />
+        {selectedTrade && (
+          <TradeDetailModal
+            trade={selectedTrade}
+            accounts={accounts}
+            onSave={handleTradeDetailSave}
+            onClose={handleTradeDetailClose}
+          />
+        )}
+        <Section
+          title="Pending / Open Trades"
+          sub={`${pendingTrades.length} active trade${pendingTrades.length !== 1 ? 's' : ''} — click any row to view details or close trade`}>
+          <TradeTable trades={pendingTrades} onRowClick={handleTradeClick}
+            emptyMsg="No pending or open trades. Log a trade with status 'Pending' or 'Open'." />
         </Section>
       </div>
     );
   }
 
+  // ── Win Trades section ────────────────────────────────────────────────────
   if (activeSection === 'wins') {
     const wins = tradesByStatus('win');
     const totalWin = wins.reduce((s, t) => s + Number(t.amount), 0);
     return (
       <div className="dash-content">
+        {selectedTrade && (
+          <TradeDetailModal
+            trade={selectedTrade}
+            accounts={accounts}
+            onSave={handleTradeDetailSave}
+            onClose={handleTradeDetailClose}
+          />
+        )}
         <div className="kpi-grid" style={{ marginBottom: 16 }}>
-          <KpiCard label="Win Trades" value={wins.length} color="var(--profit-text)"/>
-          <KpiCard label="Total Profit" value={fmt(totalWin)} color="var(--profit-text)"/>
-          <KpiCard label="Avg Win" value={wins.length ? fmt(totalWin / wins.length) : '—'} color="var(--profit-text)"/>
+          <KpiCard label="Win Trades"  value={wins.length}                                               color="var(--profit-text)"/>
+          <KpiCard label="Total Profit" value={fmt(totalWin)}                                             color="var(--profit-text)"/>
+          <KpiCard label="Avg Win"      value={wins.length ? fmt(totalWin / wins.length) : '—'}           color="var(--profit-text)"/>
         </div>
-        <Section title="Winning Trades">
-          <TradeTable trades={wins} emptyMsg="No winning trades yet. Keep going!" />
+        <Section title="Winning Trades" sub="Click any row for full details">
+          <TradeTable trades={wins} onRowClick={handleTradeClick} emptyMsg="No winning trades yet. Keep going!" />
         </Section>
       </div>
     );
   }
 
+  // ── Loss Trades section ───────────────────────────────────────────────────
   if (activeSection === 'losses') {
     const losses = tradesByStatus('loss');
     const totalLoss = losses.reduce((s, t) => s + Number(t.amount), 0);
     return (
       <div className="dash-content">
+        {selectedTrade && (
+          <TradeDetailModal
+            trade={selectedTrade}
+            accounts={accounts}
+            onSave={handleTradeDetailSave}
+            onClose={handleTradeDetailClose}
+          />
+        )}
         <div className="kpi-grid" style={{ marginBottom: 16 }}>
-          <KpiCard label="Loss Trades" value={losses.length} color="var(--loss-text)"/>
-          <KpiCard label="Total Loss" value={fmt(totalLoss)} color="var(--loss-text)"/>
-          <KpiCard label="Avg Loss" value={losses.length ? fmt(totalLoss / losses.length) : '—'} color="var(--loss-text)"/>
+          <KpiCard label="Loss Trades" value={losses.length}                                               color="var(--loss-text)"/>
+          <KpiCard label="Total Loss"  value={fmt(totalLoss)}                                              color="var(--loss-text)"/>
+          <KpiCard label="Avg Loss"    value={losses.length ? fmt(totalLoss / losses.length) : '—'}        color="var(--loss-text)"/>
         </div>
-        <Section title="Losing Trades">
-          <TradeTable trades={losses} emptyMsg="No losing trades! You're clean." />
+        <Section title="Losing Trades" sub="Click any row for full details">
+          <TradeTable trades={losses} onRowClick={handleTradeClick} emptyMsg="No losing trades! You're clean." />
         </Section>
       </div>
     );
   }
 
+  // ── Accounts section ──────────────────────────────────────────────────────
   if (activeSection === 'accounts') {
     return (
       <div className="dash-content">
@@ -460,7 +532,7 @@ export default function Dashboard({ activeSection, stats, assetStats, pnlSeries,
             <button className="btn btn-primary" onClick={() => setShowAddAccount(true)}>Add your first account</button>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 }}>
             {accounts.map(a => (
               <AccountCard key={a.id} account={a} trades={allTrades} onDelete={deleteAccount} />
             ))}
@@ -473,6 +545,15 @@ export default function Dashboard({ activeSection, stats, assetStats, pnlSeries,
   // ── Overview (default) ────────────────────────────────────────────────────
   return (
     <div className="dash-content">
+      {selectedTrade && (
+        <TradeDetailModal
+          trade={selectedTrade}
+          accounts={accounts}
+          onSave={handleTradeDetailSave}
+          onClose={handleTradeDetailClose}
+        />
+      )}
+
       {/* KPI row */}
       <div className="kpi-grid">
         <KpiCard label="Account Balance" value={`$${Math.abs(s.balance).toFixed(2)}`}
@@ -492,7 +573,6 @@ export default function Dashboard({ activeSection, stats, assetStats, pnlSeries,
         <Section title="Cumulative P&L" sub={series.length ? `${series[0].date} → ${series[series.length - 1].date}` : 'No trades yet'}>
           <PnlLineChart data={series} />
         </Section>
-
         <Section title="Win / Loss">
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
             <DonutChart wins={s.profitDays} losses={s.lossDays} />
@@ -518,12 +598,11 @@ export default function Dashboard({ activeSection, stats, assetStats, pnlSeries,
         </Section>
       </div>
 
-      {/* Asset performance + best/worst */}
+      {/* Asset performance */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 200px', gap: 14 }}>
         <Section title="Asset Performance" sub="Net P&L per instrument">
           <BarChart data={assets} />
         </Section>
-
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <Section title="🏆 Best Asset">
             {bestAsset ? (
@@ -547,12 +626,13 @@ export default function Dashboard({ activeSection, stats, assetStats, pnlSeries,
       </div>
 
       {/* Recent trades table */}
-      <Section title="Recent Trades" sub="Latest 20 entries across all accounts">
+      <Section title="Recent Trades" sub="Latest 20 entries — click any row for full details">
         <TradeTable
           trades={Object.values(allTrades)
             .filter(t => t.traded)
-            .sort((a,b) => b.date.localeCompare(a.date))
+            .sort((a, b) => b.date.localeCompare(a.date))
             .slice(0, 20)}
+          onRowClick={handleTradeClick}
           emptyMsg="No trades logged yet. Click any day on the calendar to add one."
         />
       </Section>

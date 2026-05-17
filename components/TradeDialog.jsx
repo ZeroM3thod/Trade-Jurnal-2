@@ -12,23 +12,25 @@ const COMMON_ASSETS = [
 ];
 
 export default function TradeDialog({ date, existing, accounts, onSave, onDelete, onClose }) {
-  const [tab,        setTab]        = useState('trade');   // 'trade' | 'details' | 'notes'
-  const [traded,     setTraded]     = useState(null);
-  const [status,     setStatus]     = useState('closed');
-  const [pnl,        setPnl]        = useState(null);
-  const [amount,     setAmount]     = useState('');
-  const [note,       setNote]       = useState('');
-  const [accountId,  setAccountId]  = useState('');
-  const [assetName,  setAssetName]  = useState('');
-  const [lots,       setLots]       = useState('');
-  const [margin,     setMargin]     = useState('');
-  const [entryPrice, setEntryPrice] = useState('');
-  const [exitPrice,  setExitPrice]  = useState('');
-  const [direction,  setDirection]  = useState(null);
-  const [reason,     setReason]     = useState('');
-  const [screenshot, setScreenshot] = useState(null);    // File object
+  const [tab,         setTab]         = useState('trade');
+  const [traded,      setTraded]      = useState(null);
+  const [status,      setStatus]      = useState('pending');   // default = pending
+  const [pnl,         setPnl]         = useState(null);
+  const [amount,      setAmount]      = useState('');
+  const [note,        setNote]        = useState('');
+  const [accountId,   setAccountId]   = useState('');
+  const [assetName,   setAssetName]   = useState('');
+  const [lots,        setLots]        = useState('');
+  const [margin,      setMargin]      = useState('');
+  const [entryPrice,  setEntryPrice]  = useState('');
+  const [exitPrice,   setExitPrice]   = useState('');
+  const [entryTime,   setEntryTime]   = useState('');
+  const [exitTime,    setExitTime]    = useState('');
+  const [direction,   setDirection]   = useState(null);
+  const [reason,      setReason]      = useState('');
+  const [screenshot,  setScreenshot]  = useState(null);
   const [screenshotPreview, setScreenshotPreview] = useState(null);
-  const [saving,     setSaving]     = useState(false);
+  const [saving,      setSaving]      = useState(false);
   const [assetDropdown, setAssetDropdown] = useState(false);
   const assetRef = useRef(null);
 
@@ -36,7 +38,7 @@ export default function TradeDialog({ date, existing, accounts, onSave, onDelete
     if (existing) {
       setTraded(existing.traded);
       setPnl(existing.pnl || null);
-      setStatus(existing.status || 'closed');
+      setStatus(existing.status || 'pending');
       setAmount(existing.amount ? String(existing.amount) : '');
       setNote(existing.note || '');
       setAccountId(existing.account_id ? String(existing.account_id) : '');
@@ -45,19 +47,22 @@ export default function TradeDialog({ date, existing, accounts, onSave, onDelete
       setMargin(existing.margin ? String(existing.margin) : '');
       setEntryPrice(existing.entry_price ? String(existing.entry_price) : '');
       setExitPrice(existing.exit_price ? String(existing.exit_price) : '');
+      setEntryTime(existing.entry_time || '');
+      setExitTime(existing.exit_time || '');
       setDirection(existing.direction || null);
       setReason(existing.trade_reason || '');
       setScreenshotPreview(existing.screenshot_url || null);
     } else {
-      setTraded(null); setPnl(null); setStatus('closed'); setAmount(''); setNote('');
+      setTraded(null); setPnl(null); setStatus('pending'); setAmount(''); setNote('');
       setAccountId(''); setAssetName(''); setLots(''); setMargin('');
-      setEntryPrice(''); setExitPrice(''); setDirection(null); setReason('');
+      setEntryPrice(''); setExitPrice(''); setEntryTime(''); setExitTime('');
+      setDirection(null); setReason('');
       setScreenshot(null); setScreenshotPreview(null);
     }
     setTab('trade');
   }, [existing, date]);
 
-  // Close asset dropdown on outside click
+  // Close dropdown on outside click
   useEffect(() => {
     const handler = (e) => {
       if (assetRef.current && !assetRef.current.contains(e.target)) setAssetDropdown(false);
@@ -76,7 +81,8 @@ export default function TradeDialog({ date, existing, accounts, onSave, onDelete
     ? COMMON_ASSETS.filter(a => a.toLowerCase().includes(assetName.toLowerCase()))
     : COMMON_ASSETS.slice(0, 8);
 
-  const handleScreenshot = (e) => {
+  // Upload screenshot to local public/trade folder
+  const handleScreenshotChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setScreenshot(file);
@@ -89,27 +95,19 @@ export default function TradeDialog({ date, existing, accounts, onSave, onDelete
     if (traded === null) return;
     setSaving(true);
 
-    // Upload screenshot if new file selected
+    // Upload screenshot to public/trade/
     let screenshotUrl = existing?.screenshot_url || null;
     if (screenshot) {
       try {
-        // Try Supabase Storage upload
-        const { supabase } = await import('@/lib/supabase');
-        if (supabase) {
-          const ext  = screenshot.name.split('.').pop();
-          const path = `${k}-${Date.now()}.${ext}`;
-          const { data: upData, error: upErr } = await supabase.storage
-            .from('trade-screenshots')
-            .upload(path, screenshot, { upsert: true });
-          if (!upErr) {
-            const { data: urlData } = supabase.storage
-              .from('trade-screenshots')
-              .getPublicUrl(path);
-            screenshotUrl = urlData?.publicUrl || null;
-          }
+        const fd = new FormData();
+        fd.append('file', screenshot);
+        const res = await fetch('/api/upload', { method: 'POST', body: fd });
+        if (res.ok) {
+          const { url } = await res.json();
+          screenshotUrl = url;
         }
       } catch (err) {
-        console.warn('Screenshot upload failed (Storage may not be configured):', err);
+        console.warn('Screenshot upload failed:', err);
       }
     }
 
@@ -117,15 +115,17 @@ export default function TradeDialog({ date, existing, accounts, onSave, onDelete
       date:           k,
       traded,
       status:         traded ? status : 'closed',
-      pnl:            traded ? (pnl || 'profit') : null,
+      pnl:            traded ? (pnl || null) : null,
       amount:         traded ? (parseFloat(amount) || 0) : 0,
       note:           traded ? note.trim() : null,
       account_id:     accountId ? parseInt(accountId) : null,
       asset_name:     assetName.trim() || null,
-      lots:           lots   ? parseFloat(lots)   : null,
-      margin:         margin ? parseFloat(margin) : null,
+      lots:           lots       ? parseFloat(lots)       : null,
+      margin:         margin     ? parseFloat(margin)     : null,
       entry_price:    entryPrice ? parseFloat(entryPrice) : null,
       exit_price:     exitPrice  ? parseFloat(exitPrice)  : null,
+      entry_time:     entryTime  || null,
+      exit_time:      exitTime   || null,
       direction:      direction  || null,
       trade_reason:   reason.trim() || null,
       screenshot_url: screenshotUrl,
@@ -141,7 +141,7 @@ export default function TradeDialog({ date, existing, accounts, onSave, onDelete
     onClose();
   };
 
-  const canSave = traded !== null;
+  const isClosed = status === 'closed';
 
   return (
     <div className="overlay" role="dialog" aria-modal="true"
@@ -158,7 +158,7 @@ export default function TradeDialog({ date, existing, accounts, onSave, onDelete
         </div>
 
         {/* Tab bar */}
-        <div style={{ margin: '0 0 0', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ borderBottom: '1px solid var(--border)' }}>
           <div className="dlg-tabs" style={{ margin: 0 }}>
             <button className={`dlg-tab${tab === 'trade'   ? ' active' : ''}`} onClick={() => setTab('trade')}>Trade</button>
             <button className={`dlg-tab${tab === 'details' ? ' active' : ''}`} onClick={() => setTab('details')}>Details</button>
@@ -186,14 +186,19 @@ export default function TradeDialog({ date, existing, accounts, onSave, onDelete
                   <div>
                     <div className="form-label">Trade Status</div>
                     <div className="choice-row" style={{ gap: 6 }}>
-                      {['closed','open','pending'].map(s => (
+                      {['pending','open','closed'].map(s => (
                         <button key={s} className={`choice-btn${status === s ? ' active' : ''}`}
                           style={{ textTransform: 'capitalize', fontSize: 12 }}
                           onClick={() => setStatus(s)}>
-                          {s === 'open' ? '🔴 Open' : s === 'pending' ? '⏳ Pending' : '✅ Closed'}
+                          {s === 'pending' ? '⏳ Pending' : s === 'open' ? '🔴 Open' : '✅ Closed'}
                         </button>
                       ))}
                     </div>
+                    {status === 'pending' && (
+                      <div style={{ fontSize: 11, color: 'var(--gold)', marginTop: 6, padding: '5px 10px', background: 'rgba(253,214,99,0.08)', borderRadius: 'var(--radius)' }}>
+                        Trade will appear in Pending Trades. You can close it later from the Dashboard.
+                      </div>
+                    )}
                   </div>
 
                   {/* Account */}
@@ -207,12 +212,12 @@ export default function TradeDialog({ date, existing, accounts, onSave, onDelete
                     </select>
                     {accounts.length === 0 && (
                       <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
-                        No accounts yet — add one from the Dashboard → Accounts tab
+                        No accounts yet — add one from Dashboard → Accounts.
                       </div>
                     )}
                   </div>
 
-                  {/* Asset Name with suggestions */}
+                  {/* Asset */}
                   <div ref={assetRef} style={{ position: 'relative' }}>
                     <div className="form-label">Asset / Symbol</div>
                     <input className="inp" type="text" placeholder="e.g. EUR/USD, BTC/USD, TSLA…"
@@ -246,42 +251,66 @@ export default function TradeDialog({ date, existing, accounts, onSave, onDelete
                     <div className="form-label">Position</div>
                     <div className="choice-row">
                       <button className={`choice-btn${direction === 'long'  ? ' active' : ''}`}
-                        style={direction === 'long' ? { borderColor: 'var(--profit-text)', background: 'var(--profit-bg)', color: 'var(--profit-text)' } : {}}
+                        style={direction === 'long'  ? { borderColor: 'var(--profit-text)', background: 'var(--profit-bg)', color: 'var(--profit-text)' } : {}}
                         onClick={() => setDirection('long')}>📈 Long (Buy)</button>
                       <button className={`choice-btn${direction === 'short' ? ' active' : ''}`}
-                        style={direction === 'short' ? { borderColor: 'var(--loss-text)', background: 'var(--loss-bg)', color: 'var(--loss-text)' } : {}}
+                        style={direction === 'short' ? { borderColor: 'var(--loss-text)',   background: 'var(--loss-bg)',   color: 'var(--loss-text)'   } : {}}
                         onClick={() => setDirection('short')}>📉 Short (Sell)</button>
                     </div>
                   </div>
 
-                  {/* Result — only for closed trades */}
-                  {status === 'closed' && (
+                  {/* Entry Price + Entry Time */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                     <div>
-                      <div className="form-label">Result</div>
-                      <div className="pnl-row">
-                        <button className={`pnl-chip profit${pnl === 'profit' ? ' active' : ''}`} onClick={() => setPnl('profit')}>📈 Profit</button>
-                        <button className={`pnl-chip loss${pnl === 'loss'     ? ' active' : ''}`} onClick={() => setPnl('loss')}>📉 Loss</button>
-                      </div>
+                      <div className="form-label">Entry Price</div>
+                      <input className="inp" type="number" step="any" placeholder="0.00000"
+                        value={entryPrice} onChange={e => setEntryPrice(e.target.value)}/>
                     </div>
-                  )}
+                    <div>
+                      <div className="form-label">Entry Time</div>
+                      <input className="inp" type="time" value={entryTime} onChange={e => setEntryTime(e.target.value)}/>
+                    </div>
+                  </div>
 
-                  {/* Amount — only for closed trades */}
-                  {status === 'closed' && (
-                    <div>
-                      <div className="form-label">P&amp;L Amount (USD)</div>
-                      <div className="amount-wrap">
-                        <span className="currency">$</span>
-                        <input className="inp" type="number" min="0" step="0.01" placeholder="0.00"
-                          style={{ flex: 1 }} value={amount} onChange={e => setAmount(e.target.value)}/>
+                  {/* Result + Exit fields — only for closed trades */}
+                  {isClosed && (
+                    <>
+                      <div>
+                        <div className="form-label">Result</div>
+                        <div className="pnl-row">
+                          <button className={`pnl-chip profit${pnl === 'profit' ? ' active' : ''}`} onClick={() => setPnl('profit')}>📈 Profit</button>
+                          <button className={`pnl-chip loss${pnl   === 'loss'   ? ' active' : ''}`} onClick={() => setPnl('loss')}>📉 Loss</button>
+                        </div>
                       </div>
-                    </div>
+
+                      <div>
+                        <div className="form-label">P&amp;L Amount (USD)</div>
+                        <div className="amount-wrap">
+                          <span className="currency">$</span>
+                          <input className="inp" type="number" min="0" step="0.01" placeholder="0.00"
+                            style={{ flex: 1 }} value={amount} onChange={e => setAmount(e.target.value)}/>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <div>
+                          <div className="form-label">Exit Price</div>
+                          <input className="inp" type="number" step="any" placeholder="0.00000"
+                            value={exitPrice} onChange={e => setExitPrice(e.target.value)}/>
+                        </div>
+                        <div>
+                          <div className="form-label">Exit Time</div>
+                          <input className="inp" type="time" value={exitTime} onChange={e => setExitTime(e.target.value)}/>
+                        </div>
+                      </div>
+                    </>
                   )}
                 </>
               )}
 
               {traded === false && (
                 <div style={{ fontSize: 13, color: 'var(--text2)', padding: '4px 0' }}>
-                  This day will be marked as a rest day — no color on the calendar.
+                  This day will be marked as a rest day — no colour on the calendar.
                 </div>
               )}
             </>
@@ -290,39 +319,6 @@ export default function TradeDialog({ date, existing, accounts, onSave, onDelete
           {/* ── TAB: Details ── */}
           {tab === 'details' && (
             <>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div>
-                  <div className="form-label">Entry Price</div>
-                  <input className="inp" type="number" step="any" placeholder="0.00000"
-                    value={entryPrice} onChange={e => setEntryPrice(e.target.value)}/>
-                </div>
-                <div>
-                  <div className="form-label">Exit Price</div>
-                  <input className="inp" type="number" step="any" placeholder="0.00000"
-                    value={exitPrice} onChange={e => setExitPrice(e.target.value)}/>
-                </div>
-              </div>
-
-              {/* Price delta preview */}
-              {entryPrice && exitPrice && direction && (
-                <div style={{
-                  padding: '8px 12px', borderRadius: 'var(--radius)', fontSize: 12,
-                  background: (() => {
-                    const diff = parseFloat(exitPrice) - parseFloat(entryPrice);
-                    const isProfit = direction === 'long' ? diff > 0 : diff < 0;
-                    return isProfit ? 'var(--profit-bg)' : 'var(--loss-bg)';
-                  })(),
-                  color: (() => {
-                    const diff = parseFloat(exitPrice) - parseFloat(entryPrice);
-                    const isProfit = direction === 'long' ? diff > 0 : diff < 0;
-                    return isProfit ? 'var(--profit-text)' : 'var(--loss-text)';
-                  })(),
-                }}>
-                  Price move: {(parseFloat(exitPrice) - parseFloat(entryPrice)).toFixed(5)}
-                  {' '}({direction === 'long' ? (parseFloat(exitPrice) > parseFloat(entryPrice) ? '↑ profitable' : '↓ loss') : (parseFloat(exitPrice) < parseFloat(entryPrice) ? '↑ profitable' : '↓ loss')})
-                </div>
-              )}
-
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
                   <div className="form-label">Lot Size</div>
@@ -339,7 +335,28 @@ export default function TradeDialog({ date, existing, accounts, onSave, onDelete
                 </div>
               </div>
 
-              {/* Lot/margin info row */}
+              {/* Price delta preview */}
+              {entryPrice && exitPrice && direction && (
+                <div style={{
+                  padding: '8px 12px', borderRadius: 'var(--radius)', fontSize: 12,
+                  background: (() => {
+                    const diff = parseFloat(exitPrice) - parseFloat(entryPrice);
+                    const isP = direction === 'long' ? diff > 0 : diff < 0;
+                    return isP ? 'var(--profit-bg)' : 'var(--loss-bg)';
+                  })(),
+                  color: (() => {
+                    const diff = parseFloat(exitPrice) - parseFloat(entryPrice);
+                    const isP = direction === 'long' ? diff > 0 : diff < 0;
+                    return isP ? 'var(--profit-text)' : 'var(--loss-text)';
+                  })(),
+                }}>
+                  Price Δ: {(parseFloat(exitPrice) - parseFloat(entryPrice)).toFixed(5)}
+                  {' '}({direction === 'long'
+                    ? (parseFloat(exitPrice) > parseFloat(entryPrice) ? '↑ profitable' : '↓ loss')
+                    : (parseFloat(exitPrice) < parseFloat(entryPrice) ? '↑ profitable' : '↓ loss')})
+                </div>
+              )}
+
               {(lots || margin) && (
                 <div style={{
                   display: 'flex', gap: 12, padding: '8px 12px',
@@ -387,19 +404,16 @@ export default function TradeDialog({ date, existing, accounts, onSave, onDelete
                     <img src={screenshotPreview} alt="Trade screenshot"
                       style={{
                         width: '100%', borderRadius: 'var(--radius)', border: '1px solid var(--border2)',
-                        maxHeight: 200, objectFit: 'cover', cursor: 'pointer',
+                        maxHeight: 220, objectFit: 'cover', cursor: 'pointer',
                       }}
                       onClick={() => window.open(screenshotPreview, '_blank')}
                     />
-                    <button
-                      style={{
-                        position: 'absolute', top: 6, right: 6, background: 'rgba(0,0,0,0.7)',
-                        border: 'none', color: '#fff', borderRadius: '50%', width: 26, height: 26,
-                        cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}
-                      onClick={() => { setScreenshot(null); setScreenshotPreview(null); }}>
-                      ✕
-                    </button>
+                    <button style={{
+                      position: 'absolute', top: 6, right: 6, background: 'rgba(0,0,0,0.75)',
+                      border: 'none', color: '#fff', borderRadius: '50%', width: 26, height: 26,
+                      cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                      onClick={() => { setScreenshot(null); setScreenshotPreview(null); }}>✕</button>
                   </div>
                 ) : (
                   <label style={{
@@ -414,8 +428,8 @@ export default function TradeDialog({ date, existing, accounts, onSave, onDelete
                       <polyline points="21 15 16 10 5 21"/>
                     </svg>
                     <span style={{ fontSize: 13, color: 'var(--text2)' }}>Click to upload screenshot</span>
-                    <span style={{ fontSize: 11, color: 'var(--text3)' }}>PNG, JPG, WEBP up to 10MB</span>
-                    <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleScreenshot}/>
+                    <span style={{ fontSize: 11, color: 'var(--text3)' }}>PNG, JPG, WEBP — auto-saved to /public/trade/</span>
+                    <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleScreenshotChange}/>
                   </label>
                 )}
               </div>
@@ -430,7 +444,7 @@ export default function TradeDialog({ date, existing, accounts, onSave, onDelete
                 <span>Saved entry</span>
                 <span className="info-val">
                   {existing.traded
-                    ? `${existing.pnl === 'profit' ? '+' : '-'}${fmt(existing.amount)}${existing.asset_name ? ` · ${existing.asset_name}` : ''}`
+                    ? `${existing.pnl === 'profit' ? '+' : existing.pnl === 'loss' ? '-' : ''}${existing.pnl ? fmt(existing.amount) : 'pending'}${existing.asset_name ? ` · ${existing.asset_name}` : ''}`
                     : 'No trade'}
                 </span>
               </div>
@@ -446,7 +460,7 @@ export default function TradeDialog({ date, existing, accounts, onSave, onDelete
             </button>
           )}
           <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={saving || !canSave}>
+          <button className="btn btn-primary" onClick={handleSave} disabled={saving || traded === null}>
             {saving ? 'Saving…' : 'Save'}
           </button>
         </div>

@@ -6,7 +6,7 @@ const guard = () =>
     ? NextResponse.json({ error: SUPABASE_MISSING }, { status: 503 })
     : null;
 
-// GET /api/trades            — returns ALL trades (for stats)
+// GET /api/trades            — returns ALL trades
 // GET /api/trades?year=2025&month=5  — returns trades for that month
 export async function GET(request) {
   const err = guard(); if (err) return err;
@@ -40,6 +40,7 @@ export async function POST(request) {
     account_id, asset_name, lots, margin,
     entry_price, exit_price, direction,
     trade_reason, screenshot_url,
+    entry_time, exit_time,
   } = body;
 
   if (!date) return NextResponse.json({ error: 'date is required' }, { status: 400 });
@@ -47,19 +48,21 @@ export async function POST(request) {
   const payload = {
     date,
     traded,
-    pnl:            traded ? pnl            : null,
-    amount:         traded ? amount         : 0,
-    note:           traded ? note           : null,
-    status:         traded ? (status || 'closed') : 'closed',
-    account_id:     traded ? (account_id    || null) : null,
-    asset_name:     traded ? (asset_name    || null) : null,
-    lots:           traded ? (lots          ?? null) : null,
-    margin:         traded ? (margin        ?? null) : null,
-    entry_price:    traded ? (entry_price   ?? null) : null,
-    exit_price:     traded ? (exit_price    ?? null) : null,
-    direction:      traded ? (direction     || null) : null,
-    trade_reason:   traded ? (trade_reason  || null) : null,
+    pnl:            traded ? (pnl            || null) : null,
+    amount:         traded ? (amount         || 0)    : 0,
+    note:           traded ? (note           || null) : null,
+    status:         traded ? (status         || 'pending') : 'closed',
+    account_id:     traded ? (account_id     || null) : null,
+    asset_name:     traded ? (asset_name     || null) : null,
+    lots:           traded ? (lots           ?? null) : null,
+    margin:         traded ? (margin         ?? null) : null,
+    entry_price:    traded ? (entry_price    ?? null) : null,
+    exit_price:     traded ? (exit_price     ?? null) : null,
+    direction:      traded ? (direction      || null) : null,
+    trade_reason:   traded ? (trade_reason   || null) : null,
     screenshot_url: traded ? (screenshot_url || null) : null,
+    entry_time:     traded ? (entry_time     || null) : null,
+    exit_time:      traded ? (exit_time      || null) : null,
   };
 
   const { data, error } = await supabase
